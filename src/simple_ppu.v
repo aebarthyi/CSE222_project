@@ -82,8 +82,8 @@ module simple_ppu (
   wire zero, inf;
   // All output pins must be assigned. If not used, assign to 0.
 
-  assign posit_add_o = posit_add #(.N(8),.es(3))(ui_in, uio_in, start, uo_out, inf, zero, done);
-  assign posit_mult_o = posit_mult #(.N(8),.es(3))(ui_in, uio_in, start, uo_out, inf, zero, done);
+  posit_add #(.N(8),.es(3))(ui_in, uio_in, start, posit_add_o, inf, zero, done);
+  posit_mult #(.N(8),.es(3))(ui_in, uio_in, start, posit_mult_o, inf, zero, done);
 
   //OUTPUT LOGIC
   always @(*) begin
