@@ -20,6 +20,8 @@ module simple_ppu (
   localparam WAIT_IN2_INST = 2'b01;
   localparam COMPUTING = 2'b10;
   localparam COMPLETE = 2'b11;
+  localparam ADD = 2'b01;
+  localparam MULT = 2'b10;
 
   reg [1:0] ppu_state_d, ppu_state_q;
   wire input1_valid, input2_valid, instruction_valid, ready_in, ready_out;
@@ -43,7 +45,7 @@ module simple_ppu (
             if(input2_valid & instruction_valid & ~input1_valid) ppu_state_d = COMPUTING;
         end
         COMPUTING: begin
-            if(done) ppu_state_d = COMPLETE;
+            if(done_add | done_mult) ppu_state_d = COMPLETE;
         end
         COMPLETE: begin
             if(ready_in) ppu_state_d = WAIT_IN1;
@@ -58,42 +60,36 @@ module simple_ppu (
         ppu_state_q <= ppu_state_d;
     end
   end
-  
-  //INPUT/OUTPUT LOGIC
-  always @(*) begin
-    uio_oe = 1;
-    opcode_reg_d = 2'b0;
-    case(ppu_state_q)
-        WAIT_IN1: begin
-            uio_oe = 0;
-            opcode_reg_d = 2'b0;
-        end
-        WAIT_IN2_INST: begin
-            uio_oe = 0;
-            opcode_reg_d = opcode;
-        end
-    endcase
-  end
 
   wire [7:0] posit_add_o, posit_mult_o;
-  wire start;
-  assign start = (ppu_state_q == COMPUTING);
-  wire done;
-  wire zero, inf;
+  wire start_add, start_mult, done_add, done_mult;
+  assign opcode_reg_d = ui_in[4:3];
+  assign uio_oe = {8{(ppu_state_q == COMPUTING) | (ppu_state_q == COMPLETE)}};
+  assign start_add = (ppu_state_q == COMPUTING) & (opcode_reg_q == ADD);
+  assign start_mult = (ppu_state_q == COMPUTING) & (opcode_reg_q == MULT);
+
+  wire zero_add, inf_add, zero_mult, inf_mult;
+  reg zero, inf;
   // All output pins must be assigned. If not used, assign to 0.
 
-  posit_add #(.N(8),.es(3))(ui_in, uio_in, start, posit_add_o, inf, zero, done);
-  posit_mult #(.N(8),.es(3))(ui_in, uio_in, start, posit_mult_o, inf, zero, done);
+  posit_add #(.N(8),.es(4)) posit_adder(input1_reg_q, input2_reg_q, start_add, posit_add_o, inf_add, zero_add, done_add);
+  posit_mult #(.N(8),.es(4)) posit_multiplier(input1_reg_q, input2_reg_q, start_mult, posit_mult_o, inf_mult, zero_mult, done_mult);
 
   //OUTPUT LOGIC
   always @(*) begin
     output_reg_d = 8'b0;
+    inf = 0;
+    zero = 0;
     case(opcode_reg_q)
         ADD: begin
            output_reg_d = posit_add_o;
+           inf = inf_add;
+           zero = zero_add;
         end
         MULT: begin
            output_reg_d = posit_mult_o;
+           inf = inf_mult;
+           zero = zero_mult;
         end
     endcase
   end
@@ -112,27 +108,31 @@ module simple_ppu (
             end
             WAIT_IN2_INST: begin
                 if(input2_valid) input2_reg_q <= uio_in;
-                if(instruction_valid) opcode_reg_q <= ui_in[4:3]
+                if(instruction_valid) opcode_reg_q <= ui_in[4:3];
             end
-            COMPLETE: begin
-                if(compute_done) output_reg_q <= output_reg_d;
+            COMPUTING: begin
+                if(done_add | done_mult) output_reg_q <= output_reg_d;
             end
         endcase
     end
   end
   
   assign uio_out = output_reg_q;
+  reg [7:0] uo_out_l;
 
   always @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin
-        uo_out <= {4'b0, 1'b1, 3'b0};
+        uo_out_l <= {4'b0, 1'b1, 3'b0};
     end else if (ppu_state_q == COMPUTING) begin
-        uo_out <= 8'b0;
+        if(done_add | done_mult) uo_out_l <= {4'b0, 1'b1, inf, zero, 1'b1};
+        else uo_out_l <= 8'b0;
     end else if (ppu_state_q == COMPLETE) begin
-        uo_out <= {4'b0, 1'b1, inf, zero, 1'b1};
+        uo_out_l <= {4'b0, 1'b1, inf, zero, 1'b1};
     end else begin
-        uo_out <= {4'b0, 1'b1, 3'b0};
+        uo_out_l <= {4'b0, 1'b1, 3'b0};
     end
   end
+
+  assign uo_out = uo_out_l;
 
 endmodule
