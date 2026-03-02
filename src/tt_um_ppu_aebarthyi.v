@@ -22,6 +22,7 @@ module tt_um_ppu_aebarthyi (
   localparam COMPLETE = 2'b11;
   localparam ADD = 2'b01;
   localparam MULT = 2'b10;
+  localparam DIV = 2'b11;
 
   reg [1:0] ppu_state_d, ppu_state_q;
   wire input1_valid, input2_valid, instruction_valid, ready_in, ready_out;
@@ -45,7 +46,7 @@ module tt_um_ppu_aebarthyi (
             if(input2_valid & instruction_valid & ~input1_valid) ppu_state_d = COMPUTING;
         end
         COMPUTING: begin
-            if(done_add | done_mult) ppu_state_d = COMPLETE;
+            if(done_add | done_mult | done_div) ppu_state_d = COMPLETE;
         end
         COMPLETE: begin
             if(ready_in) ppu_state_d = WAIT_IN1;
@@ -61,19 +62,21 @@ module tt_um_ppu_aebarthyi (
     end
   end
 
-  wire [7:0] posit_add_o, posit_mult_o;
-  wire start_add, start_mult, done_add, done_mult;
+  wire [7:0] posit_add_o, posit_mult_o, posit_div_o;
+  wire start_add, start_mult, start_div, done_add, done_mult, done_div;
   wire ready_o, valid_o;
   assign opcode_reg_d = ui_in[4:3];
   assign uio_oe = {8{(ppu_state_q == COMPUTING) | (ppu_state_q == COMPLETE)}};
   assign start_add = (ppu_state_q == COMPUTING) & (opcode_reg_q == ADD);
   assign start_mult = (ppu_state_q == COMPUTING) & (opcode_reg_q == MULT);
+  assign start_div = (ppu_state_q == COMPUTING) & (opcode_reg_q == DIV);
 
-  wire zero_add, inf_add, zero_mult, inf_mult;
+  wire zero_add, inf_add, zero_mult, inf_mult, zero_div, inf_div;
   reg zero, inf;
 
   posit_add #(.N(8),.es(2)) posit_adder(input1_reg_q, input2_reg_q, start_add, posit_add_o, inf_add, zero_add, done_add);
   posit_mult #(.N(8),.es(2)) posit_multiplier(input1_reg_q, input2_reg_q, start_mult, posit_mult_o, inf_mult, zero_mult, done_mult);
+  posit_div #(.N(8),.es(2), .NR_Iter(0)) posit_divider(input1_reg_q, input2_reg_q, start_div, posit_div_o, inf_div, zero_div, done_div);
 
   //OUTPUT LOGIC
   always @(*) begin
@@ -90,6 +93,11 @@ module tt_um_ppu_aebarthyi (
            output_reg_d = posit_mult_o;
            inf = inf_mult;
            zero = zero_mult;
+        end
+        DIV: begin
+           output_reg_d = posit_div_o;
+           inf = inf_div;
+           zero = zero_div;
         end
     endcase
   end
@@ -111,7 +119,7 @@ module tt_um_ppu_aebarthyi (
                 if(instruction_valid) opcode_reg_q <= ui_in[4:3];
             end
             COMPUTING: begin
-                if(done_add | done_mult) output_reg_q <= output_reg_d;
+                if(done_add | done_mult | done_div) output_reg_q <= output_reg_d;
             end
         endcase
     end

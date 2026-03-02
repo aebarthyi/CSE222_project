@@ -14,18 +14,25 @@ Simple ready/valid interfaces hooked up to the main FSM are used to control flow
 Input and output data registers are read/written to via the uio_in and uio_out bidirectional ports.
 These ports are controlled via the ready/valid signals on the ui_in and uo_out ports.
 
-To load operand 1:
+## Operation
+
+# To load operand 1:
 - wait until uo_out[3] is high, indicating the unit is ready for inputs.
 - set uio_in to the desired value, and set ui_in[0] high.
 
-To load operand 2 AND opcode:
+# To load operand 2 AND opcode:
 - set uio_in to desired value, and ui_in[4:3] to one of the opcodes shown below.
 - set ui_in[1] to high to indicate the operand is valid, and ui_in[2] high to indicate opcode valid, computation doesn't start until both are valid.
 
-To read output:
+# To read output:
 - wait until uo_out[0] is high, indicating output is valid.
 - read value from uio_out, read uo_out[1] for the zero flag, and read uo_out[2] for the inf flag.
 - set ui_in[5] to high when done reading, to indicate that the value has been consumed and the unit will return to initial state
+
+# OPCODES:
+- ADD  = 01
+- MULT = 10
+- DIV  = 11
 
 ## How to test
 

@@ -86,6 +86,34 @@ async def test_project(dut):
     await ClockCycles(dut.clk, 1)
 
     ########################################
+    #    SIMPLE SINGLE DIVISION TEST
+    ########################################
+
+    # send our first 8 bit operand (valid is bit 0 of ui_in)
+    # ready is high (bit 5 of ui_in)
+    dut.ui_in.value = 0b00100001
+    dut.uio_in.value = 0b01001000	 #2.0
+    p1 = posit_2(None, 8, int(0b01001000)) 
+
+    await ClockCycles(dut.clk, 1)
+
+    dut.ui_in.value = 0b00111110
+    dut.uio_in.value = 0b01010000	#4.0
+    p2 = posit_2(None, 8, int(0b01010000))
+
+    while not (dut.uo_out.value[0]): 
+        await ClockCycles(dut.clk, 1)
+
+    dut_posit = posit_2(None, 8, int(dut.uio_out.value))
+
+    p3 = p1 / p2
+
+    # assert that 1.5 * 0.3125 = 0.46875 
+    assert dut_posit == p3
+
+    await ClockCycles(dut.clk, 1)
+
+    ########################################
     #    READY/VALID STATES TEST
     ########################################
 
@@ -190,7 +218,8 @@ async def test_project(dut):
 
             await ClockCycles(dut.clk, 1)
 
-    print(num_rounding_diffs_add)
+    print("NUMBER OF ROUNDING ERRORS ADD: " + str(num_rounding_diffs_add))
+    print("EXAMPLE CALCULATIONS:")
     for sum_err in problematic_sum:
         print(sum_err)
 
@@ -232,6 +261,49 @@ async def test_project(dut):
 
             await ClockCycles(dut.clk, 1)
     
-    print(num_rounding_diffs_mult)
+    print("NUMBER OF ROUNDING ERRORS MULTIPY: " + str(num_rounding_diffs_mult))
+    print("EXAMPLE CALCULATIONS:")
     for product in problematic_product:
         print(product)
+
+    ########################################
+    #    ROUNDING ERROR FUZZ TEST DIV
+    ########################################
+
+    num_rounding_diffs_div = 0
+    div_max_diff = 0
+    problematic_quotient = []
+
+    # 0-255
+    for i in range(0,255):
+        for j in range(0,255):
+            dut.ui_in.value = 0b00100001
+            dut.uio_in.value = i
+            p1 = posit_2(None, 8, i)
+
+            await ClockCycles(dut.clk, 1)
+
+            dut.ui_in.value = 0b00111110
+            dut.uio_in.value = j
+            p2 = posit_2(None, 8, j)
+
+            p3 = p1 / p2
+
+            dut_posit = posit_2(None, 8, int(dut.uio_out.value))
+
+            while not (dut.uo_out.value[0]):
+                await ClockCycles(dut.clk, 1)
+
+            if(dut_posit != p3):
+                num_rounding_diffs_div += 1
+
+            if (abs(dut_posit - p3) > div_max_diff):
+                problematic_quotient.append((p1, p2, p3, dut_posit))
+                div_max_diff = abs(dut_posit - p3)
+
+            await ClockCycles(dut.clk, 1)
+    
+    print("NUMBER OF ROUNDING ERRORS DIVISION: " + str(num_rounding_diffs_div))
+    print("EXAMPLE CALCULATIONS:")
+    for quotient in problematic_quotient:
+        print(quotient)

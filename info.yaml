@@ -20,6 +20,7 @@ project:
     - "tt_um_ppu_aebarthyi.v"
     - "posit_add.v"
     - "posit_mult.v"
+    - "posit_div.v"
     - "posit_utils.v"
 
 # The pinout of your project. Leave unused pins blank. DO NOT delete or add any pins.
